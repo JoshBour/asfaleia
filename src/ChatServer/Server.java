@@ -3,16 +3,28 @@ package ChatServer;
 /*
  * Source code from http://www.dreamincode.net/forums/topic/259777-a-simple-chat-program-with-clientserver-gui-optional/
  */
-import java.io.*;
-import java.net.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+
+import asfaleia.KeyGenerator;
 import asfaleia.ChatMessage;
 
 /*
  * The server that can be run both as a console application or a GUI
  */
 public class Server {
+	
+	public static PublicKey publicKey;
+	
 	// a unique ID for each connection
 	private static int uniqueId;
 	// an ArrayList to keep the list of the Client
@@ -25,6 +37,8 @@ public class Server {
 	private int port;
 	// the boolean that will be turned of to stop the server
 	private boolean keepGoing;
+	
+	private KeyPair keyPair;
 	
 
 	/*
@@ -44,6 +58,7 @@ public class Server {
 		sdf = new SimpleDateFormat("HH:mm:ss");
 		// ArrayList for the Client list
 		al = new ArrayList<ClientThread>();
+		keyPair = null;
 	}
 	
 	public void start() {
@@ -51,6 +66,11 @@ public class Server {
 		/* create socket server and wait for connection requests */
 		try 
 		{
+			keyPair = KeyGenerator.generateKeyPair();
+			
+			publicKey = keyPair.getPublic();
+			
+			System.out.println(publicKey);
 			// the socket used by the server
 			ServerSocket serverSocket = new ServerSocket(port);
 
@@ -59,6 +79,7 @@ public class Server {
 			{
 				// format message saying we are waiting
 				display("Server waiting for Clients on port " + port + ".");
+				
 				
 				Socket socket = serverSocket.accept();  	// accept connection
 				// if I was asked to stop
@@ -88,7 +109,7 @@ public class Server {
 			}
 		}
 		// something went bad
-		catch (IOException e) {
+		catch (IOException | NoSuchAlgorithmException e) {
             String msg = sdf.format(new Date()) + " Exception on new ServerSocket: " + e + "\n";
 			display(msg);
 		}
@@ -213,6 +234,9 @@ public class Server {
 				// create output first
 				sOutput = new ObjectOutputStream(socket.getOutputStream());
 				sInput  = new ObjectInputStream(socket.getInputStream());
+				
+				sOutput.writeObject(publicKey);
+				sOutput.flush();
 				// read the username
 				username = (String) sInput.readObject();
 				display(username + " just connected.");
@@ -230,11 +254,15 @@ public class Server {
 
 		// what will run forever
 		public void run() {
+			
 			// to loop until LOGOUT
 			boolean keepGoing = true;
 			while(keepGoing) {
 				// read a String (which is an object)
 				try {
+					/**
+					 * TODO decode the message
+					 */					
 					cm = (ChatMessage) sInput.readObject();
 				}
 				catch (IOException e) {

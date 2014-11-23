@@ -3,11 +3,29 @@ package ChatClient;
 /*
  * Source code from http://www.dreamincode.net/forums/topic/259777-a-simple-chat-program-with-clientserver-gui-optional/
  */
-import java.net.*;
-import java.io.*;
-import java.util.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.Socket;
+import java.security.InvalidKeyException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.util.Scanner;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+
+import ChatServer.Server;
+import asfaleia.ArrayUtils;
 import asfaleia.ChatMessage;
+import asfaleia.KeyGenerator;
 
 /*
  * The Client that can be run both as a console or a GUI
@@ -25,6 +43,9 @@ public class Client {
 	// the server, the port and the username
 	private String server, username;
 	private int port;
+	
+	private KeyPair keyPair;
+	private PublicKey serverKey;
 
 	/*
 	 * Constructor called by console mode server: the server address port: the
@@ -53,6 +74,7 @@ public class Client {
 	public boolean start() {
 		// try to connect to the server
 		try {
+			keyPair = KeyGenerator.generateKeyPair();
 			socket = new Socket(server, port);
 		}
 		// if it failed not much I can so
@@ -73,11 +95,23 @@ public class Client {
 			display("Exception creating new Input/output Streams: " + eIO);
 			return false;
 		}
-
+		try {
+			serverKey = (PublicKey) sInput.readObject();
+			System.out.println(serverKey);
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 		// creates the Thread to listen from the server
 		new ListenFromServer().start();
+		
 		// Send our username to the server this is the only message that we
 		// will send as a String. All other messages will be ChatMessage objects
+
 		try {
 			sOutput.writeObject(username);
 		} catch (IOException eIO) {
@@ -105,8 +139,32 @@ public class Client {
 	 */
 	void sendMessage(ChatMessage msg) {
 		try {
+			byte[] msgBytes = msg.getMessage().getBytes();
+			
+			// to signature
+			Signature sig = Signature.getInstance("SHA1withRSA");
+			sig.initSign(keyPair.getPrivate());
+			sig.update(msgBytes);
+			byte[] signature = sig.sign();
+			
+			// h sunopsh
+			MessageDigest sha1 = MessageDigest.getInstance("SHA1");
+			byte[] digest = sha1.digest(msgBytes);
+			
+			Cipher cipher;
+			cipher = Cipher.getInstance("RSA");
+			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
+			byte[] encBytes = cipher.doFinal(digest);
+				
+
+			byte[] length = ArrayUtils.intToByteArray(signature.length);
+			
+			byte[] olaMazi = ArrayUtils.concat(length,signature,encBytes,msgBytes);
+			
+			System.out.println("Ola mazi: " + olaMazi);
+			
 			sOutput.writeObject(msg);
-		} catch (IOException e) {
+		} catch (IOException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException | NoSuchAlgorithmException | NoSuchPaddingException | SignatureException e) {
 			display("Exception writing to server: " + e);
 		}
 	}
