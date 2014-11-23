@@ -13,11 +13,12 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 
 import asfaleia.KeyGenerator;
 import asfaleia.ChatMessage;
-
+import asfaleia.ArrayUtils;
 /*
  * The server that can be run both as a console application or a GUI
  */
@@ -70,7 +71,7 @@ public class Server {
 			
 			publicKey = keyPair.getPublic();
 			
-			System.out.println(publicKey);
+		//	System.out.println(publicKey);
 			// the socket used by the server
 			ServerSocket serverSocket = new ServerSocket(port);
 
@@ -235,6 +236,9 @@ public class Server {
 				sOutput = new ObjectOutputStream(socket.getOutputStream());
 				sInput  = new ObjectInputStream(socket.getInputStream());
 				
+				
+			
+				
 				sOutput.writeObject(publicKey);
 				sOutput.flush();
 				// read the username
@@ -260,10 +264,16 @@ public class Server {
 			while(keepGoing) {
 				// read a String (which is an object)
 				try {
-					/**
-					 * TODO decode the message
-					 */					
+					
 					cm = (ChatMessage) sInput.readObject();
+					byte[] messagesend= cm.getMessage().getBytes();
+					byte[] temp=Arrays.copyOf(messagesend,4);
+				
+					 int length = byteArrayToInt(temp);
+					//System.out.println("length:"+length);
+				        byte[] sentSignature = Arrays.copyOfRange(temp,0,256);
+				       System.out.println(sentSignature);
+					
 				}
 				catch (IOException e) {
 					display(username + " Exception reading Streams: " + e);
@@ -301,6 +311,17 @@ public class Server {
 			close();
 		}
 		
+		public int byteArrayToInt(byte[] data)
+		{
+			int value = 0;
+		    for (int i = 0; i < 4; i++) {
+		        int shift = (4 - 1 - i) * 8;
+		        value += (data[i] & 0x000000FF) << shift;
+		    }
+		    return value;
+		}
+		 
+
 		// try to close everything
 		private void close() {
 			// try to close the connection

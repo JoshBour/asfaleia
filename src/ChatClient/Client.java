@@ -97,7 +97,7 @@ public class Client {
 		}
 		try {
 			serverKey = (PublicKey) sInput.readObject();
-			System.out.println(serverKey);
+			//System.out.println(serverKey);
 		} catch (ClassNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -141,27 +141,34 @@ public class Client {
 		try {
 			byte[] msgBytes = msg.getMessage().getBytes();
 			
-			// to signature
-			Signature sig = Signature.getInstance("SHA1withRSA");
-			sig.initSign(keyPair.getPrivate());
-			sig.update(msgBytes);
-			byte[] signature = sig.sign();
-			
 			// h sunopsh
 			MessageDigest sha1 = MessageDigest.getInstance("SHA1");
 			byte[] digest = sha1.digest(msgBytes);
 			
+			
+			// to signature to dimiourgoume pairnwntas ti sinopsi apo ton algorithmo mazi me to idiotiko kleidi!
+			Signature sig = Signature.getInstance("SHA1withRSA");
+			sig.initSign(keyPair.getPrivate());
+			sig.update(digest);
+			byte[] signature = sig.sign();
+			System.out.println(signature);
+			
+			
+			//Mexri edw exoume tin psifiaki ipografi tou minimatos 
+			//Twra tha kwdikopoiisoume to minima mesw tou algorithmou rsa kai tou dimosiou kleidou tou apostolea!
+			
 			Cipher cipher;
 			cipher = Cipher.getInstance("RSA");
 			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
-			byte[] encBytes = cipher.doFinal(digest);
-				
-
+			byte[] encBytes = cipher.doFinal(msgBytes);
+			
+			
 			byte[] length = ArrayUtils.intToByteArray(signature.length);
 			
-			byte[] olaMazi = ArrayUtils.concat(length,signature,encBytes,msgBytes);
 			
-			System.out.println("Ola mazi: " + olaMazi);
+			byte[] olaMazi = ArrayUtils.concat(length,signature,encBytes);
+			
+			//System.out.println("Ola mazi: " + olaMazi);
 			
 			sOutput.writeObject(msg);
 		} catch (IOException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException | NoSuchAlgorithmException | NoSuchPaddingException | SignatureException e) {
