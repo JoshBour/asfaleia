@@ -15,6 +15,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.security.cert.CertificateFactory;
 import java.util.Scanner;
 
 import javax.crypto.BadPaddingException;
@@ -141,7 +142,7 @@ public class Client {
 		try {
 			byte[] msgBytes = msg.getMessage().getBytes();
 			
-			// h sunopsh
+			// h sunopsh, to checksum
 			MessageDigest sha1 = MessageDigest.getInstance("SHA1");
 			byte[] digest = sha1.digest(msgBytes);
 			
@@ -151,7 +152,6 @@ public class Client {
 			sig.initSign(keyPair.getPrivate());
 			sig.update(digest);
 			byte[] signature = sig.sign();
-			System.out.println(signature);
 			
 			
 			//Mexri edw exoume tin psifiaki ipografi tou minimatos 
@@ -163,14 +163,15 @@ public class Client {
 			byte[] encBytes = cipher.doFinal(msgBytes);
 			
 			
-			byte[] length = ArrayUtils.intToByteArray(signature.length);
-			
-			
+			byte[] length = ArrayUtils.intToByteArray(signature.length);					
 			byte[] olaMazi = ArrayUtils.concat(length,signature,encBytes);
 			
-			//System.out.println("Ola mazi: " + olaMazi);
+			String encodedMsg = new String(olaMazi);
 			
-			sOutput.writeObject(msg);
+//			CertificateFactory cf = CertificateFactory.getInstance("X.509");
+			
+			sOutput.writeObject(new ChatMessage(ChatMessage.MESSAGE,encodedMsg));
+			
 		} catch (IOException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException | NoSuchAlgorithmException | NoSuchPaddingException | SignatureException e) {
 			display("Exception writing to server: " + e);
 		}
