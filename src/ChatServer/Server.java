@@ -49,6 +49,7 @@ public class Server {
 	private boolean keepGoing;
 
 	private KeyPair keyPair;
+	private PublicKey ClientKey;
 
 	/*
 	 * server constructor that receive the port to listen to for connection as
@@ -266,38 +267,44 @@ public class Server {
 			while (keepGoing) {
 				// read a String (which is an object)
 				try {
+				 ClientKey = (PublicKey) sInput.readObject();
+					 
+					 
+				cm = (ChatMessage) sInput.readObject();
+					
+				byte[] receivedMsg = cm.getMessage().getBytes();
 
-					cm = (ChatMessage) sInput.readObject();
-					System.out.println(cm.getMessage());
-					byte[] receivedMsg = cm.getMessage().getBytes();
+				byte[] lengthBytes = Arrays.copyOf(receivedMsg, 4);
 
-					byte[] lengthBytes = Arrays.copyOf(receivedMsg, 4);
-
-					int length = byteArrayToInt(lengthBytes);
-					// System.out.println("length:"+length);
-
-					// ksekiname apo 4 giati ta prwta 4 byte einai to mhkos
-					byte[] sentSignature = Arrays.copyOfRange(receivedMsg, 4,
-							4 + length);
-
-					// pernoume to encoded message mesw tou RSA
-					byte[] encodedMsg = Arrays.copyOfRange(receivedMsg,
+				int length = byteArrayToInt(lengthBytes);
+					 
+					
+				// ksekiname apo 4 giati ta prwta 4 byte einai to mhkos
+				byte[] sentSignature = Arrays.copyOfRange(receivedMsg, 4,
+						4 + length);
+				
+				// pernoume to encoded message mesw tou RSA
+				byte[] encodedMsg = Arrays.copyOfRange(receivedMsg,
 							4 + length, receivedMsg.length);
-
-					// epivevaiwnoume thn upografh
-					Signature sig = Signature.getInstance("SHA1withRSA");
-					sig.initVerify(keyPair.getPublic());
-					sig.update(encodedMsg);
 					
-					if (!sig.verify(sentSignature))
-			            throw new SignatureException("Signature invalid");
+				
+				// epivevaiwnoume thn upografh
+				Signature sig = Signature.getInstance("SHA1withRSA");
+				sig.initVerify(ClientKey);
+				sig.update(encodedMsg);
+			
+				if (!sig.verify(sentSignature))
+						 throw new SignatureException("Signature invalid");
+						
+						 Cipher cipher = Cipher.getInstance("RSA");
+						 cipher.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
+						 cipher.update(encodedMsg);
+						 byte[] msg = cipher.doFinal(encodedMsg);
+						 String decodedMsg = new String(msg);
+						 System.out.println(decodedMsg);
+						
 					
-					Cipher cipher = Cipher.getInstance("RSA");
-					cipher.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-					byte[] msg = cipher.doFinal(encodedMsg);
-					String decodedMsg = new String(msg);
-					System.out.println(decodedMsg);
-
+					
 				} catch (IOException e) {
 					display(username + " Exception reading Streams: " + e);
 					break;
@@ -312,11 +319,11 @@ public class Server {
 				} catch (SignatureException e) {
 					e.printStackTrace();
 					break;
-				} catch (NoSuchPaddingException e) {
+				}catch (NoSuchPaddingException e) {
 					break;
 				} catch (IllegalBlockSizeException e) {
 					// TODO Auto-generated catch block
-					e.printStackTrace();
+					e.printStackTrace(); 
 				} catch (BadPaddingException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();

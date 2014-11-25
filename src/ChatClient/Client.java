@@ -140,6 +140,11 @@ public class Client {
 	 */
 	void sendMessage(ChatMessage msg) {
 		try {
+			
+			sOutput.writeObject(keyPair.getPublic());
+			sOutput.flush();
+			
+			
 			byte[] msgBytes = msg.getMessage().getBytes();
 			
 			// h sunopsh, to checksum
@@ -162,15 +167,14 @@ public class Client {
 			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
 			byte[] encBytes = cipher.doFinal(msgBytes);
 			
-			
+			System.out.println(encBytes);
 			byte[] length = ArrayUtils.intToByteArray(signature.length);					
 			byte[] olaMazi = ArrayUtils.concat(length,signature,encBytes);
 			
 			String encodedMsg = new String(olaMazi);
 			
 //			CertificateFactory cf = CertificateFactory.getInstance("X.509");
-			
-			sOutput.writeObject(new ChatMessage(ChatMessage.MESSAGE,encodedMsg));
+					sOutput.writeObject(new ChatMessage(ChatMessage.MESSAGE,encodedMsg));
 			
 		} catch (IOException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException | NoSuchAlgorithmException | NoSuchPaddingException | SignatureException e) {
 			display("Exception writing to server: " + e);
