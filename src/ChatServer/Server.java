@@ -10,6 +10,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Signature;
@@ -17,23 +18,22 @@ import java.security.SignatureException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Date;
 
 import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 
-import asfaleia.KeyGenerator;
-import asfaleia.ChatMessage;
 import asfaleia.ArrayUtils;
+import asfaleia.ChatMessage;
+import asfaleia.KeyPairFactory;
+import asfaleia.SecurityUtils;
 
 /*
  * The server that can be run both as a console application or a GUI
  */
 public class Server {
-
-	public static PublicKey publicKey;
 
 	// a unique ID for each connection
 	private static int uniqueId;
@@ -49,7 +49,6 @@ public class Server {
 	private boolean keepGoing;
 
 	private KeyPair keyPair;
-	private PublicKey ClientKey;
 
 	/*
 	 * server constructor that receive the port to listen to for connection as
@@ -75,9 +74,7 @@ public class Server {
 		keepGoing = true;
 		/* create socket server and wait for connection requests */
 		try {
-			keyPair = KeyGenerator.generateKeyPair();
-
-			publicKey = keyPair.getPublic();
+			keyPair = KeyPairFactory.generateKeyPair();
 
 			// System.out.println(publicKey);
 			// the socket used by the server
@@ -243,7 +240,7 @@ public class Server {
 				sOutput = new ObjectOutputStream(socket.getOutputStream());
 				sInput = new ObjectInputStream(socket.getInputStream());
 
-				sOutput.writeObject(publicKey);
+				sOutput.writeObject(keyPair.getPublic());
 				sOutput.flush();
 				// read the username
 				username = (String) sInput.readObject();
@@ -265,71 +262,59 @@ public class Server {
 			// to loop until LOGOUT
 			boolean keepGoing = true;
 			while (keepGoing) {
-				// read a String (which is an object)
+				String message = "";
 				try {
-				 ClientKey = (PublicKey) sInput.readObject();
-					 
-					 
-				cm = (ChatMessage) sInput.readObject();
-					
-				byte[] receivedMsg = cm.getMessage().getBytes();
+					// diavazoume to public key to client
+					PublicKey clientPublicKey = (PublicKey) sInput.readObject();
 
-				byte[] lengthBytes = Arrays.copyOf(receivedMsg, 4);
+					cm = (ChatMessage) sInput.readObject();
 
-				int length = byteArrayToInt(lengthBytes);
-					 
-					
-				// ksekiname apo 4 giati ta prwta 4 byte einai to mhkos
-				byte[] sentSignature = Arrays.copyOfRange(receivedMsg, 4,
-						4 + length);
-				
-				// pernoume to encoded message mesw tou RSA
-				byte[] encodedMsg = Arrays.copyOfRange(receivedMsg,
-							4 + length, receivedMsg.length);
-					
-				
-				// epivevaiwnoume thn upografh
-				Signature sig = Signature.getInstance("SHA1withRSA");
-				sig.initVerify(ClientKey);
-				sig.update(encodedMsg);
-			
-				if (!sig.verify(sentSignature))
-						 throw new SignatureException("Signature invalid");
-						
-						 Cipher cipher = Cipher.getInstance("RSA");
-						 cipher.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-						 cipher.update(encodedMsg);
-						 byte[] msg = cipher.doFinal(encodedMsg);
-						 String decodedMsg = new String(msg);
-						 System.out.println(decodedMsg);
-						
-					
-					
-				} catch (IOException e) {
-					display(username + " Exception reading Streams: " + e);
+					byte[] receivedMsg = Base64.getDecoder().decode(
+							cm.getMessage().getBytes());
+
+					// ta prwta 4 bytes einai to mhkos ths upografhs
+					byte[] signatureLengthBytes = Arrays.copyOf(receivedMsg, 4);
+					int signatureLength = ArrayUtils
+							.byteArrayToInt(signatureLengthBytes);
+
+					// h upografh ksekinaei meta ta 4 bytes ews to mhkos pou
+					// vrhkame panw
+					byte[] sentSignature = Arrays.copyOfRange(receivedMsg, 4,
+							4 + signatureLength);
+
+					// to upoloipo wrapped message
+					byte[] wrappedMessage = Arrays.copyOfRange(receivedMsg,
+							4 + signatureLength, receivedMsg.length);
+
+					// to mhnuma se plain text
+					byte[] decryptedMsg = SecurityUtils.decryptMessage(
+							wrappedMessage, keyPair.getPrivate());
+
+					// kanoume pali hash gia na eleksoume an einai ola kala
+					byte[] digest = MessageDigest.getInstance("SHA1").digest(
+							decryptedMsg);
+
+					// epivevaiwnoume thn upografh kai petame exception an dn
+					// einai swsth
+					Signature sig = Signature.getInstance("SHA1withRSA");
+					sig.initVerify(clientPublicKey);
+					sig.update(digest);
+
+					if (!sig.verify(sentSignature))
+						throw new SignatureException("Signature invalid");
+
+					// an den eixame exception ws edw shmainei oti ola phgan
+					// kala
+					// opote dhmiourgoume to mhnuma se string
+					message = new String(decryptedMsg);
+
+				} catch (IOException | ClassNotFoundException
+						| NoSuchAlgorithmException | InvalidKeyException
+						| SignatureException | NoSuchPaddingException
+						| IllegalBlockSizeException | BadPaddingException e) {
+					display(username + " An exception has occured: " + e);
 					break;
-				} catch (ClassNotFoundException e2) {
-					break;
-				} catch (NoSuchAlgorithmException e) {
-					e.printStackTrace();
-					break;
-				} catch (InvalidKeyException e) {
-					e.printStackTrace();
-					break;
-				} catch (SignatureException e) {
-					e.printStackTrace();
-					break;
-				}catch (NoSuchPaddingException e) {
-					break;
-				} catch (IllegalBlockSizeException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace(); 
-				} catch (BadPaddingException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
 				}
-				// the messaage part of the ChatMessage
-				String message = cm.getMessage();
 
 				// Switch on the type of message receive
 				switch (cm.getType()) {
@@ -357,15 +342,6 @@ public class Server {
 			// connected Clients
 			remove(id);
 			close();
-		}
-
-		public int byteArrayToInt(byte[] data) {
-			int value = 0;
-			for (int i = 0; i < 4; i++) {
-				int shift = (4 - 1 - i) * 8;
-				value += (data[i] & 0x000000FF) << shift;
-			}
-			return value;
 		}
 
 		// try to close everything

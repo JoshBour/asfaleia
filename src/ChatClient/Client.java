@@ -9,24 +9,21 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
-import java.security.Signature;
 import java.security.SignatureException;
-import java.security.cert.CertificateFactory;
+import java.util.Base64;
 import java.util.Scanner;
 
 import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 
-import ChatServer.Server;
 import asfaleia.ArrayUtils;
 import asfaleia.ChatMessage;
-import asfaleia.KeyGenerator;
+import asfaleia.KeyPairFactory;
+import asfaleia.SecurityUtils;
 
 /*
  * The Client that can be run both as a console or a GUI
@@ -44,7 +41,7 @@ public class Client {
 	// the server, the port and the username
 	private String server, username;
 	private int port;
-	
+
 	private KeyPair keyPair;
 	private PublicKey serverKey;
 
@@ -75,7 +72,7 @@ public class Client {
 	public boolean start() {
 		// try to connect to the server
 		try {
-			keyPair = KeyGenerator.generateKeyPair();
+			keyPair = KeyPairFactory.generateKeyPair();
 			socket = new Socket(server, port);
 		}
 		// if it failed not much I can so
@@ -98,7 +95,7 @@ public class Client {
 		}
 		try {
 			serverKey = (PublicKey) sInput.readObject();
-			//System.out.println(serverKey);
+			// System.out.println(serverKey);
 		} catch (ClassNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -106,10 +103,10 @@ public class Client {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
+
 		// creates the Thread to listen from the server
 		new ListenFromServer().start();
-		
+
 		// Send our username to the server this is the only message that we
 		// will send as a String. All other messages will be ChatMessage objects
 
@@ -140,43 +137,33 @@ public class Client {
 	 */
 	void sendMessage(ChatMessage msg) {
 		try {
-			
+			// stelnoume to public key tou client ston server
 			sOutput.writeObject(keyPair.getPublic());
 			sOutput.flush();
-			
-			
+
 			byte[] msgBytes = msg.getMessage().getBytes();
-			
+
 			// h sunopsh, to checksum
-			MessageDigest sha1 = MessageDigest.getInstance("SHA1");
-			byte[] digest = sha1.digest(msgBytes);
+			byte[] digest = MessageDigest.getInstance("SHA1").digest(msgBytes);
+
+			// upografoume to mhnuma
+			byte[] signedMessage = SecurityUtils.signMessage(digest, keyPair.getPrivate());
+			
+			// to kanoume encrypt
+			byte[] encryptedMessage = SecurityUtils.encryptMessage(msgBytes, serverKey);
+			
+			// ta vazoume mazi
+			byte[] olaMazi = ArrayUtils.concat(signedMessage,encryptedMessage);
+
+			// kanoume base64 encoding sto prohgoumeno kai to prosthetoume se string
+			String encodedMsg = new String(Base64.getEncoder().encode(olaMazi));
 			
 			
-			// to signature to dimiourgoume pairnwntas ti sinopsi apo ton algorithmo mazi me to idiotiko kleidi!
-			Signature sig = Signature.getInstance("SHA1withRSA");
-			sig.initSign(keyPair.getPrivate());
-			sig.update(digest);
-			byte[] signature = sig.sign();
-			
-			
-			//Mexri edw exoume tin psifiaki ipografi tou minimatos 
-			//Twra tha kwdikopoiisoume to minima mesw tou algorithmou rsa kai tou dimosiou kleidou tou apostolea!
-			
-			Cipher cipher;
-			cipher = Cipher.getInstance("RSA");
-			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
-			byte[] encBytes = cipher.doFinal(msgBytes);
-			
-			System.out.println(encBytes);
-			byte[] length = ArrayUtils.intToByteArray(signature.length);					
-			byte[] olaMazi = ArrayUtils.concat(length,signature,encBytes);
-			
-			String encodedMsg = new String(olaMazi);
-			
-//			CertificateFactory cf = CertificateFactory.getInstance("X.509");
-					sOutput.writeObject(new ChatMessage(ChatMessage.MESSAGE,encodedMsg));
-			
-		} catch (IOException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException | NoSuchAlgorithmException | NoSuchPaddingException | SignatureException e) {
+			sOutput.writeObject(new ChatMessage(ChatMessage.MESSAGE, encodedMsg));
+
+		} catch (IOException | InvalidKeyException | IllegalBlockSizeException
+				| BadPaddingException | NoSuchAlgorithmException
+				| NoSuchPaddingException | SignatureException e) {
 			display("Exception writing to server: " + e);
 		}
 	}
